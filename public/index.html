@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KuroGuard — Pre-Flight Safety Gate</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.6rem; } .sub { color: #888; margin-top: -0.8rem; }
+  form { display: grid; gap: .5rem; margin: 1rem 0; }
+  input, select, button { font: inherit; padding: .5rem; border: 1px solid #8885; border-radius: 6px; background: transparent; color: inherit; }
+  button { cursor: pointer; background: #2563eb; color: #fff; border: none; }
+  button:disabled { opacity: .5; }
+  pre { white-space: pre-wrap; background: #8882; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+  .verdict-GO { color: #16a34a; } .verdict-BLOCK { color: #dc2626; }
+  .verdict-HOLD { color: #d97706; } .verdict-ABSTAIN { color: #6b7280; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+  small { color: #888; }
+</style>
+</head>
+<body>
+<h1>🛡️ KuroGuard</h1>
+<p class="sub">Pre-Flight Safety Gate for agent wallets — buys 3 checks on Telegraph before any transaction executes.</p>
+<p><small>Checks: contract audit · wash-trading detection · sanctions screening · ≈ $0.03 test USDC per run · caps $0.05/ask, $1.00 total.</small></p>
+<form id="f">
+  <div class="row">
+    <select id="chainId">
+      <option value="56">BSC (56)</option>
+      <option value="1">Ethereum (1)</option>
+      <option value="8453">Base (8453)</option>
+      <option value="11155111">Sepolia (11155111)</option>
+    </select>
+    <input id="contract" placeholder="contract 0x…" value="0x4200000000000000000000000000000000000006" required>
+  </div>
+  <div class="row">
+    <input id="label" placeholder="label (optional, e.g. WETH)">
+    <input id="value" placeholder="value (wei, default 0)" value="0">
+  </div>
+  <label><input type="checkbox" id="demo" checked> Demo mode — simulated miner answers, $0 spent (uncheck for a live paid run)</label>
+  <div class="row">
+    <button type="submit" id="go">Run the gate</button>
+    <button type="button" id="bad">Try the honeypot fixture</button>
+    <button type="button" id="spend">Spend so far</button>
+  </div>
+</form>
+<pre id="out">Ready. A verdict shows here with its hash, per-check findings, receipts and signal hashes.</pre>
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+function show(x) { out.textContent = typeof x === "string" ? x : JSON.stringify(x, null, 2); }
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("go").disabled = true;
+  show("Buying 3 checks on Telegraph…");
+  const demo = $("demo").checked ? "clean" : undefined;
+  const r = await fetch("/api/guard", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chainId: Number($("chainId").value), contract: $("contract").value.trim(), value: $("value").value.trim() || "0", label: $("label").value.trim() || undefined, demo }) });
+  const j = await r.json();
+  if (!r.ok) { show("Error: " + (j.error || r.status)); }
+  else { out.innerHTML = ""; const h = document.createElement("h2"); h.textContent = j.decision.verdict + "  " + j.decision.score + "/100"; h.className = "verdict-" + j.decision.verdict; out.appendChild(h); const pre = document.createElement("pre"); pre.textContent = j.text; out.appendChild(pre); }
+  $("go").disabled = false;
+});
+$("bad").addEventListener("click", () => {
+  $("chainId").value = "56";
+  $("contract").value = "0x9c6a008f73a1d1941f4763b88c6ee8c8e4ef8b0a";
+  $("label").value = "Backdoor Pass (known-bad fixture)";
+  $("demo").checked = true;
+  show("Honeypot fixture loaded — switch demo off only with a funded burner. Press “Run the gate”.");
+});
+$("spend").addEventListener("click", async () => {
+  const r = await fetch("/api/spend"); show(await r.json());
+});
+</script>
+</body>
+</html>

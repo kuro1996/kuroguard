@@ -1,0 +1,151 @@
+{
+  "id": "grd_03bcd469623370ed",
+  "idempotencyKey": "03bcd469623370edccba4bbd7c18af79",
+  "at": "2026-11-21T18:28:41.764Z",
+  "subject": {
+    "chainId": 56,
+    "chainName": "bsc",
+    "contract": "0x9c6a008f73a1d1941f4763b88c6ee8c8e4ef8b0a",
+    "value": "0",
+    "label": "Backdoor Pass (known-bad fixture)"
+  },
+  "decision": {
+    "verdict": "BLOCK",
+    "score": 29,
+    "riskBps": 7100,
+    "confidenceBps": 8000,
+    "coverage": 1,
+    "summary": "Blocked: contract_audit (honeypot pattern reported); wash_trading (wash-trading evidence reported).",
+    "reasons": [
+      {
+        "code": "BLOCKER",
+        "check": "contract_audit",
+        "detail": "contract_audit: honeypot pattern reported; drain pattern reported; critical-severity finding reported; backdoor reported"
+      },
+      {
+        "code": "BLOCKER",
+        "check": "wash_trading",
+        "detail": "wash_trading: wash-trading evidence reported"
+      }
+    ],
+    "openRisks": [],
+    "conflicts": [
+      "evidence conflicts: contract_audit, wash_trading FAIL while sanctions PASS"
+    ],
+    "findings": [
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "contract_audit",
+        "status": "FAIL",
+        "severity": "critical",
+        "riskScore": 95,
+        "notes": [
+          "honeypot pattern reported",
+          "drain pattern reported",
+          "critical-severity finding reported",
+          "backdoor reported"
+        ]
+      },
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "wash_trading",
+        "status": "FAIL",
+        "severity": "critical",
+        "riskScore": 95,
+        "notes": [
+          "wash-trading evidence reported"
+        ]
+      },
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "sanctions",
+        "status": "PASS",
+        "severity": "none",
+        "riskScore": 0,
+        "notes": [
+          "miner reports no issues"
+        ]
+      }
+    ],
+    "verdictHash": "0xc347bc5a2a1840fd65bf61f2fa091b69b21d054b111d61714bbe3091aa8cd461"
+  },
+  "costUusdc": 0,
+  "costCounted": 0,
+  "cached": false,
+  "replayed": false,
+  "events": [
+    {
+      "type": "plan",
+      "at": "2026-11-21T18:28:42.157Z",
+      "data": {
+        "checks": [
+          {
+            "check": "contract_audit",
+            "intent": "SMART_CONTRACT_AUDIT_GENERAL",
+            "quoteUsdc": 0.01
+          },
+          {
+            "check": "wash_trading",
+            "intent": "WASH_TRADING_DETECTION_GENERAL",
+            "quoteUsdc": 0.01
+          },
+          {
+            "check": "sanctions",
+            "intent": "SANCTIONS_SCREENING_MATCH_GENERAL",
+            "quoteUsdc": 0.01
+          }
+        ],
+        "priceUusdc": 30000,
+        "ok": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:42.157Z",
+      "data": {
+        "check": "contract_audit",
+        "status": "FAIL",
+        "severity": "critical",
+        "simulated": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:42.157Z",
+      "data": {
+        "check": "wash_trading",
+        "status": "FAIL",
+        "severity": "critical",
+        "simulated": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:42.158Z",
+      "data": {
+        "check": "sanctions",
+        "status": "PASS",
+        "severity": "none",
+        "simulated": true
+      }
+    },
+    {
+      "type": "decision",
+      "at": "2026-11-21T18:28:42.158Z",
+      "data": {
+        "verdict": "BLOCK",
+        "score": 29,
+        "verdictHash": "0xc347bc5a2a1840fd65bf61f2fa091b69b21d054b111d61714bbe3091aa8cd461"
+      }
+    }
+  ]
+}

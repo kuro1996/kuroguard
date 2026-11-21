@@ -1,0 +1,135 @@
+{
+  "id": "grd_e42ef3304df469d2",
+  "idempotencyKey": "e42ef3304df469d251da6b4b1beb159f",
+  "at": "2026-11-21T18:28:40.510Z",
+  "subject": {
+    "chainId": 8453,
+    "chainName": "base",
+    "contract": "0x4200000000000000000000000000000000000006",
+    "value": "0",
+    "label": "WETH"
+  },
+  "decision": {
+    "verdict": "GO",
+    "score": 100,
+    "riskBps": 0,
+    "confidenceBps": 10000,
+    "coverage": 1,
+    "summary": "Go: all required checks answered, no blocker, score 100/100.",
+    "reasons": [],
+    "openRisks": [],
+    "conflicts": [],
+    "findings": [
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "contract_audit",
+        "status": "PASS",
+        "severity": "none",
+        "riskScore": 0,
+        "notes": [
+          "miner reports no issues"
+        ]
+      },
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "wash_trading",
+        "status": "PASS",
+        "severity": "none",
+        "riskScore": 0,
+        "notes": [
+          "miner reports no issues"
+        ]
+      },
+      {
+        "costUusdc": 0,
+        "durationMs": 0,
+        "minerName": "demo (simulated — no Telegraph purchase)",
+        "receiptProblems": [],
+        "check": "sanctions",
+        "status": "PASS",
+        "severity": "none",
+        "riskScore": 0,
+        "notes": [
+          "miner reports no issues"
+        ]
+      }
+    ],
+    "verdictHash": "0x32acfdda24d63aeb153924da91e61dfd208d85592e8713c026eed7a6bfea4ff3"
+  },
+  "costUusdc": 0,
+  "costCounted": 0,
+  "cached": false,
+  "replayed": false,
+  "events": [
+    {
+      "type": "plan",
+      "at": "2026-11-21T18:28:41.761Z",
+      "data": {
+        "checks": [
+          {
+            "check": "contract_audit",
+            "intent": "SMART_CONTRACT_AUDIT_GENERAL",
+            "quoteUsdc": 0.01
+          },
+          {
+            "check": "wash_trading",
+            "intent": "WASH_TRADING_DETECTION_GENERAL",
+            "quoteUsdc": 0.01
+          },
+          {
+            "check": "sanctions",
+            "intent": "SANCTIONS_SCREENING_MATCH_GENERAL",
+            "quoteUsdc": 0.01
+          }
+        ],
+        "priceUusdc": 30000,
+        "ok": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:41.762Z",
+      "data": {
+        "check": "contract_audit",
+        "status": "PASS",
+        "severity": "none",
+        "simulated": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:41.763Z",
+      "data": {
+        "check": "wash_trading",
+        "status": "PASS",
+        "severity": "none",
+        "simulated": true
+      }
+    },
+    {
+      "type": "finding",
+      "at": "2026-11-21T18:28:41.763Z",
+      "data": {
+        "check": "sanctions",
+        "status": "PASS",
+        "severity": "none",
+        "simulated": true
+      }
+    },
+    {
+      "type": "decision",
+      "at": "2026-11-21T18:28:41.764Z",
+      "data": {
+        "verdict": "GO",
+        "score": 100,
+        "verdictHash": "0x32acfdda24d63aeb153924da91e61dfd208d85592e8713c026eed7a6bfea4ff3"
+      }
+    }
+  ]
+}
