@@ -1,7 +1,7 @@
 {
-  "id": "grd_e42ef3304df469d2",
-  "idempotencyKey": "e42ef3304df469d251da6b4b1beb159f",
-  "at": "2026-11-21T18:28:40.510Z",
+  "id": "grd_b3f817c23b91d2f3",
+  "idempotencyKey": "b3f817c23b91d2f38b3595920dc2a904",
+  "at": "2026-11-21T19:06:22.791Z",
   "subject": {
     "chainId": 8453,
     "chainName": "base",
@@ -66,10 +66,12 @@
   "costCounted": 0,
   "cached": false,
   "replayed": false,
+  "simulated": true,
+  "cacheable": true,
   "events": [
     {
       "type": "plan",
-      "at": "2026-11-21T18:28:41.761Z",
+      "at": "2026-11-21T19:06:24.543Z",
       "data": {
         "checks": [
           {
@@ -89,12 +91,13 @@
           }
         ],
         "priceUusdc": 30000,
+        "maxPriceUusdc": 60000,
         "ok": true
       }
     },
     {
       "type": "finding",
-      "at": "2026-11-21T18:28:41.762Z",
+      "at": "2026-11-21T19:06:24.545Z",
       "data": {
         "check": "contract_audit",
         "status": "PASS",
@@ -104,7 +107,7 @@
     },
     {
       "type": "finding",
-      "at": "2026-11-21T18:28:41.763Z",
+      "at": "2026-11-21T19:06:24.546Z",
       "data": {
         "check": "wash_trading",
         "status": "PASS",
@@ -114,7 +117,7 @@
     },
     {
       "type": "finding",
-      "at": "2026-11-21T18:28:41.763Z",
+      "at": "2026-11-21T19:06:24.546Z",
       "data": {
         "check": "sanctions",
         "status": "PASS",
@@ -124,11 +127,19 @@
     },
     {
       "type": "decision",
-      "at": "2026-11-21T18:28:41.764Z",
+      "at": "2026-11-21T19:06:24.547Z",
       "data": {
         "verdict": "GO",
         "score": 100,
         "verdictHash": "0x32acfdda24d63aeb153924da91e61dfd208d85592e8713c026eed7a6bfea4ff3"
+      }
+    },
+    {
+      "type": "done",
+      "at": "2026-11-21T19:06:24.547Z",
+      "data": {
+        "id": "grd_b3f817c23b91d2f3",
+        "verdict": "GO"
       }
     }
   ]

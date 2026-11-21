@@ -24,13 +24,27 @@ export const TELEGRAPH = {
    * Who an escrow payment authorisation pays. Default = the escrow Diamond
    * (per the Telegraph docs / SDK pattern). OPEN ITEM (2026-11-22): a GET
    * probe of /engine/v1/ask returned a generic 402 whose escrow accept
-   * names payee 0x72a70e949362670bf8bcead24efc5b8f950aa08b (a live contract
-   * on Sepolia) instead of the Diamond. The POST ask challenge may differ
-   * from that generic 402 — the unpaid-POST probe needs operator approval
-   * and is still pending. If the live POST challenge names 0x72a7…,
-   * set TELEGRAPH_ESCROW_PAYEE=0x72a70e949362670bf8bcead24efc5b8f950aa08b
-   * after verifying that address is Telegraph's settler; never set an
-   * unverified payee. See FINDINGS.md.
+   * names payee 0x72a70e949362670bf8bcead24efc5b8f950aa08b instead of the
+   * Diamond below. Verification 2026-11-22 (read-only, $0):
+   *  - 0x72a7… IS a live Telegraph Diamond on Sepolia: Etherscan shows
+   *    contract "Diamond" (v0.8.30, verified source), Sourcify runtime
+   *    match (verified 2026-11-17), ~985 txns, ~0.2 ETH balance, and
+   *    recent "Deposit USDC" / "Register Miner" / "Update Miner" /
+   *    "Register Wasm" / "Submit Epoch" calls — the same Diamond proxy
+   *    bytecode family as 0x3624… (13,193 txns, created 28 days ago via
+   *    factory 0x329b9872ae2171bB9E0DA7556494d895D9f32d9e). It is the
+   *    Diamond currently receiving USDC deposits.
+   *  - NOT yet decisive: the unpaid-POST probe of /engine/v1/ask (the
+   *    call that would show which payee the LIVE ask challenge uses)
+   *    timed out without an answer on 2026-11-22 and was NOT retried;
+   *    the deployer of 0x72a7… and its settlement-facet functions were
+   *    not enumerated (Diamond facets are delegate-called, not in the
+   *    proxy ABI). No public Telegraph doc names the settler address.
+   *  Conclusion: 0x72a7… is very likely the live escrow Diamond, but
+   *  TELEGRAPH_ESCROW_PAYEE is still NOT set — set it only after the
+   *  unpaid-POST probe confirms the ask-specific challenge names it.
+   *  Until then the client fails closed (refuses the mismatch) rather
+   *  than signing for an unverified payee. See FINDINGS.md §3/§7.
    */
   payee: "0x3624EB012B5E998BB57B6bE6C9Cfc9c4bc5eb99b",
 } as const;

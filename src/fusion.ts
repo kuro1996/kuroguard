@@ -90,6 +90,25 @@ const CLEAN_PATTERNS: RegExp[] = [
   /low risk/i,
 ];
 
+/**
+ * A negated clean claim — "not safe", "not clean", "never safe" — must
+ * NEVER pass as CLEAN. These are tested on the raw text before any clean
+ * pattern is trusted, because the negation-stripping in positiveText would
+ * otherwise hide them (and "never safe" is not stripped at all).
+ */
+const NEGATED_CLEAN: RegExp[] = [/\bnot\s+(safe|clean)\b/i, /\bnever\s+(safe|clean)\b/i, /\bisn'?t\s+(safe|clean)\b/i, /\bunsafe\b/i, /\bnot\s+clean\b/i];
+
+/** Clean patterns that are themselves negations ("no match", "not listed"):
+ * they only make sense on the raw text, because positiveText strips
+ * `no…`/`not…` clauses. Tested on raw text ONLY when no NEGATED_CLEAN
+ * matched and no blocker/warn fired. */
+const NEGATION_CLEAN_PATTERNS: RegExp[] = [
+  /no (issues?|vulnerabilit|findings?|sanctions?|wash trading) (found|detected)/i,
+  /no (reentrancy|honeypot|backdoor|drain)/i,
+  /no match/i,
+  /not (listed|sanctioned|flagged)/i,
+];
+
 /** Flatten a miner's free-form/structured answer into searchable text. */
 export function answerText(result: unknown): string {
   if (result === null || result === undefined) return "";
@@ -157,10 +176,18 @@ export function parseFinding(check: CheckId, result: unknown, meta: Partial<Find
       riskScore = Math.max(riskScore, 70);
     }
   }
-  if (notes.length === 0 && CLEAN_PATTERNS.some((re) => re.test(text))) {
-    notes.push("miner reports no issues");
-    severity = "none";
-    riskScore = Math.min(riskScore, 5);
+  if (notes.length === 0 && !NEGATED_CLEAN.some((re) => re.test(text))) {
+    // CLEAN patterns are tested on positiveText (negation-stripped), so a
+    // "not safe" answer cannot match /safe/i — and on the raw text only for
+    // patterns that ARE negations ("no match", "not listed"). A negated
+    // clean claim ("not safe" / "never safe") never reaches this branch.
+    const cleanOnPositive = CLEAN_PATTERNS.some((re) => re.test(positiveText));
+    const cleanOnRawNegation = NEGATION_CLEAN_PATTERNS.some((re) => re.test(text));
+    if (cleanOnPositive || cleanOnRawNegation) {
+      notes.push("miner reports no issues");
+      severity = "none";
+      riskScore = Math.min(riskScore, 5);
+    }
   }
   if (notes.length === 0) {
     notes.push("answer parsed, no decisive signal extracted");
@@ -286,6 +313,26 @@ export function fuse(findings: Finding[], hashFn: (s: string) => string = sha256
   } else {
     verdict = "BLOCK";
     summary = `Blocked: score ${score}/100 below the hold floor.`;
+  }
+
+  // Unverifiable payment evidence caps the verdict at HOLD, even when the
+  // answers themselves look clean: a GO must rest on receipts and signals
+  // the node itself confirms. A missing receipt, a receipt that does not
+  // match what was signed, or a signal the node cannot find (or attributes
+  // to another miner) means the purchase behind the finding is unproven —
+  // the gate may not green-light a signature on unproven evidence.
+  const unverifiedEvidence = findings.filter((f) => f.receiptProblems.length > 0 || f.signalStatus === "missing" || f.signalStatus === "mismatch");
+  if (unverifiedEvidence.length > 0 && verdict === "GO") {
+    verdict = "HOLD";
+    score = Math.min(score, 79);
+    summary = `Hold: payment evidence unverified for ${unverifiedEvidence.map((f) => f.check).join(", ")} — human review required before signing.`;
+    for (const f of unverifiedEvidence) {
+      reasons.push({
+        code: f.receiptProblems.length > 0 ? "RECEIPT_UNVERIFIED" : "SIGNAL_UNVERIFIED",
+        check: f.check,
+        detail: [...f.receiptProblems, ...(f.signalStatus === "missing" || f.signalStatus === "mismatch" ? [`signal ${f.signalStatus} on the node`] : [])].join("; "),
+      });
+    }
   }
 
   const riskBps = Math.max(0, Math.min(10000, (100 - score) * 100));

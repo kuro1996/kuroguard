@@ -51,11 +51,39 @@ reviewer should check. Each item names its evidence.
 - **Why it matters:** the signed EIP-191 authorisation pays `to` — if the
   client signs for the wrong payee, settlement fails (or worse, pays an
   address the operator never verified).
-- **Status:** an unpaid `POST /engine/v1/ask` probe — the call that would
-  show which payee the *live ask* challenge uses (the GET 402 may be a
-  generic gateway response, not the ask-specific challenge) — required
-  operator approval and the approval timed out unanswered. **Not retried.**
-  The probe is pending.
+- **Status (updated 2026-11-22 evening):** an unpaid `POST /engine/v1/ask`
+  probe — the call that would show which payee the *live ask* challenge
+  uses (the GET 402 may be a generic gateway response, not the ask-specific
+  challenge) — required operator approval and the approval timed out
+  unanswered. **Not retried.** A second attempt on 2026-11-22 ~19:06 WIB
+  also timed out (15 s, 0 bytes, approval unanswered) and was NOT retried
+  again, per the standing order. The probe is still pending.
+- **On-chain verification (read-only, 2026-11-22, $0) — 0x72a7… checks out
+  as a live Telegraph Diamond:**
+  - Etherscan Sepolia: contract named **"Diamond"**, compiler v0.8.30,
+    verified source, ETH balance ~0.2, 985 transactions, active minutes
+    before the check (latest block 12183696).
+  - Sourcify v2: `runtimeMatch: "match"` (verified 2026-11-17).
+  - Recent methods: `Deposit USDC` (from several distinct users — the
+    escrow deposit entry point), `Register Miner`, `Update Miner`,
+    `Register Wasm`, `Activate Entitlement`, `Publish Entitlement`,
+    `Submit Epoch`, `Set Intent Volume`; internal transfers to
+    `0x71cA4dF7a1931609C9060058B899fFdF79F384d0` (tiny ETH amounts).
+  - Same Diamond proxy bytecode family as `0x3624…` (identical proxy
+    prefix `6080604052361560e757…`, "Diamond: Function does not exist"
+    fallback). `0x3624…`: 13,193 txns, 0 ETH, created 28 days ago via
+    factory `0x329b9872ae2171bB9E0DA7556494d895D9f32d9e`; its latest 25
+    txns show miner-registry calls but no `Deposit USDC`, while `0x72a7…`
+    is the Diamond currently receiving deposits.
+  - NOT established: the deployer/creation tx of `0x72a7…` (Etherscan's
+    ContractCreator section did not render in the crawl), and the
+    settlement-facet functions (Diamond facets are delegate-called and
+    are not in the proxy ABI; the Sourcify file-tree endpoint 404'd).
+    No public Telegraph doc names the settler address.
+  - **Conclusion:** `0x72a7…` is very likely the live escrow Diamond and
+    the correct `TELEGRAPH_ESCROW_PAYEE` — but the decisive evidence (the
+    ask-specific POST challenge) is still missing, so the env var is
+    **still NOT set**. The client keeps failing closed on mismatch.
 - **Code response:** the client validates the payee against a configured
   value (default: the Diamond) and refuses anything else, with an error
   that names the observed address. `TELEGRAPH_ESCROW_PAYEE` overrides it
@@ -90,10 +118,80 @@ reviewer should check. Each item names its evidence.
 - Free quote path works end-to-end against the live node:
   `kuroguard quote 8453 0x4200…0006` → `ok: true`, 3 checks × $0.01.
 - Demo gate: clean contract → **GO 100/100**; honeypot fixture →
-  **BLOCK 29/100** (see `evidence/verdicts/`).
-- 29/29 unit tests pass; `tsc --noEmit` clean.
+  **BLOCK 29/100** (see `evidence/verdicts/demo/`).
+- 51/51 unit tests pass; `tsc --noEmit` clean (verified independently
+  2026-11-22 after the Milestone 1.1 fixes — the builder's earlier 29/29
+  claim is now superseded by the 51-test suite, run in this session).
 
-## 6. What is NOT yet verified (needs the funded burner)
+## 7. Payee verification, second pass (2026-11-22 evening, read-only, $0)
+
+See §3 for the full evidence. Summary: `0x72a7…` verified as a live,
+verified-source Telegraph Diamond actively receiving `Deposit USDC`;
+the unpaid-POST probe timed out twice (approval unanswered, not retried);
+deployer + settlement facets not enumerated. `TELEGRAPH_ESCROW_PAYEE`
+still NOT set. Next step is a single unpaid-POST probe with operator
+approval present — or the first live paid ask failing closed on the
+mismatch, which is the safe default.
+
+## 8. Independent-review fixes applied — Milestone 1.1 (2026-11-22)
+
+Review `REVIEW-20261122.md` (2 HIGH + 8 MEDIUM + 7 LOW). Fixed in this
+tree, with a test for each:
+
+- **H1** — demo/live namespaces: demo seals to `evidence/verdicts/demo/`,
+  live to `evidence/verdicts/`; replay requires the stored `simulated`
+  flag to match the run mode, and legacy files without the flag replay
+  for nobody. The two pre-existing demo verdicts were moved into `demo/`.
+  CLI renders `[SIMULATED …]` / `[REPLAYED …]` on the first line.
+  Test: demo-then-live same contract → live does NOT replay.
+- **H2** — post-payment 402 passes the paid amount through
+  (`billing: "unknown"`, counted in the ledger) and `"refused"` left
+  `RETRYABLE`, so a paid-but-refused ask is never signed twice.
+  Test: mock-fetch post-payment 402 → 2 HTTP calls, no retry.
+- **M1** — fallback is exactly ONE ask (first verified miner only), the
+  fallback answer must pass `answerUsable()`, a discarded canonical ask
+  is still counted, and `quote()` budgets the worst case ($0.06/run)
+  against the total cap. Test: mock-node end-to-end, 3 paid fallbacks,
+  $0.06 total, no 2nd/3rd fallback miner ever called.
+- **M2** — receipt problems or signal `missing`/`mismatch` cap the
+  verdict at HOLD (score ≤ 79) with `RECEIPT_UNVERIFIED` /
+  `SIGNAL_UNVERIFIED` reasons; a GO needs verified payment evidence.
+- **M3** — idempotency key now hashes calldata and includes the label.
+- **M4** — a quote-failure ABSTAIN is returned unsealed
+  (`cacheable: false`); nothing is written, the next run retries.
+- **M5** — CLEAN patterns are tested on negation-stripped text (plus
+  raw-text checks only for patterns that ARE negations), and an explicit
+  `not/never safe|clean` guard blocks negated passes.
+  Tests: `"not safe"`, `"not clean"`, `"never safe"` → not PASS.
+- **M6** — ledger writes are atomic (temp file + rename); a corrupt
+  ledger throws `LedgerCorruptError` (fail closed) instead of resetting
+  the cap to $0.
+- **M7** — `recordSpend()` enforces the total cap at record time
+  (`SpendCapError`, ledger untouched); the quote already checks the
+  worst-case cost.
+- **M8** — `parseTemplate()` trims trailing blank lines before parsing.
+- **L1** — server binds `127.0.0.1` only; `/api/guard` requires
+  `x-kuroguard-token` when `KUROGUARD_API_TOKEN` is set (warns on
+  startup when it is not).
+- **L2** — `quote()` returns `priceAssumption` labelling the $0.01/ask
+  figure as an assumption from a constant, plus `maxPriceUusdc` /
+  `fallbackBudgetUusdc`.
+- **L3** — every ledger entry gets a unique key (hash of
+  check/intent/receipt/signal/amount/timestamp), never `"ask"` /
+  `"paid-failure"`.
+- **L7** (bonus) — a replay returns the ORIGINAL events, not `[]`;
+  the `"done"` event is now emitted before sealing so the sealed log is
+  complete.
+- L4–L6 were NOT changed (fail-closed asset check, UNKNOWN-never-
+  produced, fund.ts receipt checks — documented limitations, no live
+  impact before the first paid run).
+
+Verification in this session: `npm test` **51/51 pass** (was 29),
+`tsc --noEmit` clean, `npm run demo` still GO 100 / BLOCK 29 with the
+SIMULATED banner. No payment was made, no env payee was set, nothing
+was submitted.
+
+## 9. What is NOT yet verified (needs the funded burner)
 
 - A real paid ask end-to-end: 402 → sign → X-PAYMENT → receipt →
   `signal_hash` → `GET /engine/v1/signal/<hash>` = verified.

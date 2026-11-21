@@ -47,16 +47,33 @@ Score is a weighted 0–100 fusion (audit 45 / wash 30 / sanctions 25).
 - **$0.05 per ask** (`maxUusdcPerAsk`) — the Telegraph client refuses any
   402 challenge above it, and validates the challenge (chain, payee,
   amount, resource) before signing.
-- **$1.00 total** across the ledger lifetime (`evidence/ledger.json`).
+- **$1.00 total** across the ledger lifetime (`evidence/ledger.json`),
+  enforced at quote time (against the worst-case run cost) AND at record
+  time (a spend that would cross the cap is refused and left unrecorded).
 - One idempotency key per gated tx per day — re-running the same gate
-  replays the stored verdict instead of buying the checks again.
-- A paid-but-failed ask is counted against the ledger and **never retried**.
+  replays the stored verdict instead of buying the checks again. The key
+  covers chain + contract + value + recipient + calldata hash + label.
+- A paid-but-failed ask is counted against the ledger and **never retried** —
+  including a 402 that arrives *after* payment was sent.
+- **Run budget:** a run costs ≈ $0.03 happy-path (3 asks × $0.01) and at
+  most **$0.06 worst-case** (3 canonical + at most one $0.01 fallback ask
+  per check). The quote states both numbers; prices are *assumed* $0.01/ask
+  from a constant, not read from a live price catalogue — the real charge
+  is validated against the per-ask cap at signing time.
+- **Demo vs live are separate namespaces:** demo ($0, simulated) verdicts
+  seal under `evidence/verdicts/demo/`; live (paid) verdicts under
+  `evidence/verdicts/`. A demo verdict can never be replayed by a live
+  run, and the CLI labels simulated/replayed verdicts on the first line.
+  A quote-failure ABSTAIN is never cached — the next run retries.
+- **Unverifiable payment evidence caps the verdict at HOLD:** a GO needs
+  receipts and signals the node itself confirms (no receipt problems,
+  signal `verified`).
 
 ## Quickstart
 
 ```bash
 npm install
-npm test                    # 29 unit tests (fusion, escrow challenge, ledger)
+npm test                    # 51 unit tests (fusion, escrow challenge, ask flow, ledger, guard)
 npm run demo                # $0 demo: clean contract → GO, honeypot → BLOCK
 npm run new-burner          # fresh Sepolia burner → .env (mode 600, never committed)
 # get Sepolia ETH for gas (PoW faucet or Google Cloud faucet — see below)
@@ -75,8 +92,8 @@ npm run dev                 # demo panel on http://localhost:3000
    Do **not** use the Alchemy faucet (needs ≥ 0.001 mainnet ETH).
 3. `npm run fund` — mints 10 test USDC (`0xcc19…2Ae17`, mintable by
    anyone), approves the escrow Diamond (`0x3624…b99b`), deposits 5 USDC,
-   and prints `effectiveBalance`. One full gate run costs ≈ $0.03, so 5
-   USDC covers ~160 runs.
+   and prints `effectiveBalance`. One full gate run costs ≈ $0.03
+   (worst case $0.06 with fallbacks), so 5 USDC covers ~80–160 runs.
 
 ## How the Telegraph client works (own implementation)
 
@@ -98,7 +115,9 @@ Written from the public protocol behaviour, not a fork of any SDK:
    what was signed and re-checks the signal with
    `GET /engine/v1/signal/<signal_hash>`.
 5. Failures **after** `X-PAYMENT` is sent are never retried (the node may
-   have billed them); failures before payment are retried once.
+   have billed them) — including a 402 refusal after payment, which is
+   reported with the paid amount attached (`billing: "unknown"`) and
+   counted against the ledger. Failures before payment are retried once.
 
 ## Known findings (see FINDINGS.md)
 
@@ -106,17 +125,30 @@ Written from the public protocol behaviour, not a fork of any SDK:
   without an evaluator (e.g. issue #187: `SECURITY_REVIEW_GENERAL` always
   went to a miner that ignored the target). KuroGuard detects an
   unusable/irrelevant answer and retries **once** as a direct ask
-  (`/engine/v1/ask/{minerId}`) to a miner verified live for that intent.
+  (`/engine/v1/ask/{minerId}`) to the first verified miner for that intent.
+  The fallback answer must also be usable, or the check ABSTAINs.
   **Correction:** the research note named miner 5530 "Telegraph Verity"
   as a fallback — live lookup shows 5530 is `carr-faa`, serving only
   `CARRIER_SERVICEABILITY_GENERAL`. The fallback list in `src/config.ts`
   was built from the live intent miner lists instead.
 - **Open item — escrow payee:** a generic GET 402 names payee
-  `0x72a70e…` (a live Sepolia contract) rather than the Diamond. The
-  unpaid-POST probe that would settle which payee the live ask challenge
-  uses is still pending operator approval. The client validates the payee
-  against a configured value (default: the Diamond) and refuses anything
-  else; `TELEGRAPH_ESCROW_PAYEE` overrides it only after verification.
+  `0x72a70e…` (a live Sepolia contract) rather than the Diamond.
+  Verification 2026-11-22 (read-only): `0x72a7…` IS a live Telegraph
+  Diamond (verified source, actively receiving `Deposit USDC`) — very
+  likely the live escrow Diamond. But the unpaid-POST probe that would
+  settle which payee the *live ask* challenge uses timed out unanswered
+  and was not retried, so `TELEGRAPH_ESCROW_PAYEE` is still NOT set; the
+  client fails closed on a payee mismatch. See FINDINGS.md §3/§7.
+- **Review fixes (Milestone 1.1, 2026-11-22):** independent review
+  `REVIEW-20261122.md` found 2 HIGH + 8 MEDIUM + 7 LOW issues; all H/M
+  and L1–L3 are fixed in this tree (demo/live namespaces, post-payment
+  402, single fallback + worst-case quote, HOLD on unverified receipts /
+  signals, calldata in the idempotency key, no caching of quote ABSTAINs,
+  negation-aware CLEAN parsing, atomic + fail-closed ledger, cap enforced
+  at record time, trailing-newline-tolerant template, loopback-only
+  server + `/api/guard` token, quote labelled as an assumption, unique
+  ledger keys per ask). Tests grew 29 → 51, all passing; `tsc --noEmit`
+  clean. See FINDINGS.md §8.
 
 ## Layout
 

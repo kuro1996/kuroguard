@@ -65,8 +65,13 @@ app.get("/health", async (_req, res) => {
 });
 
 app.get("/api/spend", (_req, res) => {
-  const ledger = loadLedger();
-  res.json({ totalUusdc: ledger.totalUusdc, totalUsdc: usdc(ledger.totalUusdc), remainingUusdc: SPEND.maxUusdcTotal - ledger.totalUusdc, capUusdc: SPEND.maxUusdcTotal, asks: ledger.entries.length });
+  try {
+    const ledger = loadLedger();
+    res.json({ totalUusdc: ledger.totalUusdc, totalUsdc: usdc(ledger.totalUusdc), remainingUusdc: SPEND.maxUusdcTotal - ledger.totalUusdc, capUusdc: SPEND.maxUusdcTotal, asks: ledger.entries.length });
+  } catch (e) {
+    // A corrupt ledger fails closed — report it, never silently reset to $0.
+    res.status(500).json({ error: (e as Error).message });
+  }
 });
 
 app.post("/api/quote", async (req, res) => {
@@ -77,6 +82,14 @@ app.post("/api/quote", async (req, res) => {
 });
 
 app.post("/api/guard", async (req, res) => {
+  // L1: a paid guard run spends real (test) money. When
+  // KUROGUARD_API_TOKEN is set, /api/guard requires it as an
+  // `x-kuroguard-token` header; without the token the endpoint refuses
+  // even on loopback. (The server also binds 127.0.0.1 only — see below.)
+  const token = process.env.KUROGUARD_API_TOKEN;
+  if (token && req.header("x-kuroguard-token") !== token) {
+    return res.status(401).json({ error: "missing or wrong x-kuroguard-token for /api/guard" });
+  }
   const tx = parseTx(req.body ?? {});
   if ("error" in tx) return res.status(400).json(tx);
   const demo = req.body?.demo === "clean" || req.body?.demo === "honeypot" ? (req.body.demo as "clean" | "honeypot") : undefined;
@@ -95,13 +108,25 @@ app.post("/api/guard", async (req, res) => {
 app.get("/api/verdicts/:key", (req, res) => {
   const key = req.params.key;
   if (!/^[0-9a-f]{32}$/.test(key)) return res.status(400).json({ error: "bad key" });
-  try {
-    const run = JSON.parse(readFileSync(join(process.cwd(), "evidence", "verdicts", `${key}.json`), "utf8"));
-    res.json(run);
-  } catch {
-    res.status(404).json({ error: "verdict not found" });
+  // Live verdicts live in evidence/verdicts/, demo verdicts in
+  // evidence/verdicts/demo/ (separate namespaces — see guard.ts).
+  for (const sub of ["", "demo"]) {
+    try {
+      const run = JSON.parse(readFileSync(join(process.cwd(), "evidence", "verdicts", sub, `${key}.json`), "utf8"));
+      return res.json(run);
+    } catch {
+      /* try the next namespace */
+    }
   }
+  res.status(404).json({ error: "verdict not found" });
 });
 
 const PORT = Number(process.env.PORT ?? 3000);
-app.listen(PORT, () => console.log(`KuroGuard panel on http://localhost:${PORT} — POST /api/guard to run the gate`));
+const HOST = "127.0.0.1"; // loopback only: the panel can trigger paid asks,
+// so it must never listen on the LAN (L1).
+app.listen(PORT, HOST, () => {
+  console.log(`KuroGuard panel on http://${HOST}:${PORT} — POST /api/guard to run the gate`);
+  if (!process.env.KUROGUARD_API_TOKEN) {
+    console.log("WARNING: KUROGUARD_API_TOKEN is not set — /api/guard accepts loopback requests without a token. Set it for any shared machine.");
+  }
+});

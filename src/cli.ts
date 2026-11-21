@@ -157,7 +157,7 @@ async function main(): Promise<void> {
     console.log(`KuroGuard pre-flight gate — ${tx.chainName} (${tx.chainId}) ${tx.contract}${demo ? ` [DEMO ${demo} — simulated answers, $0 spent]` : ""}`);
     const run = await guard.guard(tx);
     console.log(renderVerdict(run));
-    console.log(`evidence: evidence/verdicts/${run.idempotencyKey}.json`);
+    console.log(`evidence: evidence/verdicts/${run.simulated ? "demo/" : ""}${run.idempotencyKey}.json`);
     process.exit(run.decision.verdict === "GO" ? 0 : run.decision.verdict === "BLOCK" ? 1 : run.decision.verdict === "HOLD" ? 2 : 3);
   }
 

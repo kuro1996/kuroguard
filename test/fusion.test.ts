@@ -30,6 +30,22 @@ describe("parseFinding", () => {
     const f = parseFinding("wash_trading", "The data is inconclusive and more context would help.");
     expect(f.status).toBe("WARN");
   });
+  it("M5: 'not safe' is NOT a pass", () => {
+    const f = parseFinding("contract_audit", "This contract is not safe. Ownership is centralised and the owner can change the rules.");
+    expect(f.status).not.toBe("PASS");
+  });
+  it("M5: 'not clean' is NOT a pass", () => {
+    const f = parseFinding("contract_audit", "The audit found the contract is not clean: there is a hidden fee switch.");
+    expect(f.status).not.toBe("PASS");
+  });
+  it("M5: 'never safe' is NOT a pass", () => {
+    const f = parseFinding("contract_audit", "This token is never safe to hold.");
+    expect(f.status).not.toBe("PASS");
+  });
+  it("M5: a genuine 'no match' still passes", () => {
+    const f = parseFinding("sanctions", "Screened against OFAC SDN, EU and UN lists. No match found for this address.");
+    expect(f.status).toBe("PASS");
+  });
 });
 
 describe("fuse", () => {
@@ -65,5 +81,23 @@ describe("fuse", () => {
     const bad = parseFinding("wash_trading", "Wash trading detected: circular transfers.");
     const d = fuse([finding("contract_audit"), bad, finding("sanctions")]);
     expect(d.conflicts.length).toBeGreaterThan(0);
+  });
+  it("M2: a clean sweep with an unverified receipt caps at HOLD, never GO", () => {
+    const noReceipt = finding("contract_audit", { receiptProblems: ["no receipt"] });
+    const d = fuse([noReceipt, finding("wash_trading"), finding("sanctions")]);
+    expect(d.verdict).toBe("HOLD");
+    expect(d.score).toBeLessThanOrEqual(79);
+    expect(d.reasons.some((r) => r.code === "RECEIPT_UNVERIFIED")).toBe(true);
+  });
+  it("M2: a missing signal caps at HOLD, never GO", () => {
+    const missingSignal = finding("wash_trading", { signalStatus: "missing", signalHash: "0x" + "cd".repeat(32) });
+    const d = fuse([finding("contract_audit"), missingSignal, finding("sanctions")]);
+    expect(d.verdict).toBe("HOLD");
+    expect(d.reasons.some((r) => r.code === "SIGNAL_UNVERIFIED")).toBe(true);
+  });
+  it("M2: verified receipts + signals still allow GO", () => {
+    const verified = (c: Finding["check"]): Finding => finding(c, { signalStatus: "verified", signalHash: "0x" + "cd".repeat(32), receiptHash: "0x" + "ab".repeat(32) });
+    const d = fuse([verified("contract_audit"), verified("wash_trading"), verified("sanctions")]);
+    expect(d.verdict).toBe("GO");
   });
 });

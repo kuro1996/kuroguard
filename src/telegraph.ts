@@ -208,9 +208,11 @@ interface ParsedTemplate {
   resource: string;
 }
 
-/** The escrow message must have the documented layout, or it is refused. */
+/** The escrow message must have the documented layout, or it is refused.
+ * A trailing newline (or blank lines) at the end of a live template is
+ * tolerated — it is not a mismatch, only sloppy framing. */
 export function parseTemplate(template: string): ParsedTemplate {
-  const lines = template.split("\n");
+  const lines = template.trimEnd().split("\n");
   if (lines[0] !== TEMPLATE_HEADER || lines[1] !== "" || lines.length !== 2 + TEMPLATE_KEYS.length) {
     throw new ChallengeMismatchError("escrow template does not have the documented layout");
   }
@@ -351,7 +353,15 @@ export interface ClientOptions {
   allowPreSeason?: boolean;
 }
 
-const RETRYABLE = new Set(["timeout", "network", "server_error", "refused"]);
+/**
+ * Retryable failure kinds — failures BEFORE any payment was sent. A failure
+ * AFTER X-PAYMENT was sent is never retried: the node may have billed it.
+ * "refused" is deliberately NOT here: it only ever happens after payment
+ * (a paid request answered 402), and retrying it would sign and pay twice.
+ * Its billing is "unknown" (see fail() — paidUusdc > 0), so ask() also
+ * returns it immediately on that ground; the set is the second line of
+ * defence. */
+const RETRYABLE = new Set(["timeout", "network", "server_error"]);
 
 export class TelegraphClient {
   private readonly fetchFn: typeof fetch;
@@ -431,9 +441,10 @@ export class TelegraphClient {
   }
 
   /**
-   * Buys one answer on the escrow rail. Failures before payment and an
-   * explicit 402 refusal are retried once with a fresh challenge and nonce:
-   * nothing was billed. A failure after X-PAYMENT was sent is never retried.
+   * Buys one answer on the escrow rail. Failures before payment are retried
+   * once with a fresh challenge and nonce: nothing was billed. A failure
+   * after X-PAYMENT was sent — including a 402 refusal — is never retried
+   * and is reported with billing "unknown" and the paid amount attached.
    */
   async ask(req: AskRequest, opts: { minerId?: string; timeoutMs: number; maxUusdc?: number }): Promise<AskOutcome> {
     const started = this.now();
@@ -513,7 +524,10 @@ export class TelegraphClient {
     if (typeof paid === "string") return fail(paid, `paid request: ${paid}`, undefined, sent);
     if (paid.status === 402) {
       const reason = parseJson(paid.text) as { reason?: string; error?: string } | null;
-      return fail("refused", `payment refused: ${reason?.reason ?? reason?.error ?? "no reason given"}`, 402);
+      // Post-payment 402: the authorisation may already have been billed,
+      // so the paid amount is passed through (billing "unknown") and the
+      // caller must count it against the ledger and never retry it.
+      return fail("refused", `payment refused: ${reason?.reason ?? reason?.error ?? "no reason given"}`, 402, sent);
     }
     if (paid.status < 200 || paid.status >= 300) {
       return fail(paid.status >= 500 ? "server_error" : "client_error", `HTTP ${paid.status}: ${paid.text.slice(0, 2000)}`, paid.status, sent);
